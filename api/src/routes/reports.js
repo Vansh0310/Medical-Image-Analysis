@@ -8,7 +8,40 @@ const router = Router()
 // All routes require authentication
 router.use(auth())
 
-// Get specific report
+// Get report by exam ID
+router.get('/exam/:examId', async (req, res) => {
+  try {
+    const { examId } = req.params
+
+    // Find exam and verify ownership
+    const exam = await Exam.findOne({ _id: examId, patientId: req.user.id })
+    if (!exam) {
+      return res.status(404).json({ error: 'Exam not found' })
+    }
+
+    // Find report for this exam
+    const report = await Report.findOne({ examId: exam._id })
+    
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found for this exam' })
+    }
+
+    res.json({ 
+      report: {
+        id: report._id.toString(),
+        examId: exam._id.toString(),
+        json: report.json,
+        createdAt: report.createdAt
+      }
+    })
+
+  } catch (err) {
+    console.error('Get report by exam error:', err)
+    res.status(500).json({ error: 'Failed to get report' })
+  }
+})
+
+// Get specific report by report ID
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params

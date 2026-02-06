@@ -35,7 +35,7 @@ export function applyRules({ top1, q, modality = 'XRAY' }) {
       }
     }
 
-    // Rule 2: Normal with concerning symptoms (lower confidence)
+    // Rule 2: Normal with concerning symptoms (lower score)
     if (
       label === 'normal' &&
       q.fever === 'yes' &&
@@ -48,7 +48,7 @@ export function applyRules({ top1, q, modality = 'XRAY' }) {
       }
     }
 
-    // Rule 3: Pneumonia without typical symptoms (lower confidence)
+    // Rule 3: Pneumonia without typical symptoms (lower score)
     if (
       (label === 'pneumonia' || label === 'consolidation') &&
       q.fever !== 'yes' &&

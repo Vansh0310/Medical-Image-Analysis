@@ -21,7 +21,18 @@ const config = {
   mriSpineModelDir: process.env.MRI_SPINE_MODEL_DIR,
   mriKneeModelDir: process.env.MRI_KNEE_MODEL_DIR,
   skinModelDir: process.env.SKIN_MODEL_DIR,
-  ctChestModelDir: process.env.CT_CHEST_MODEL_DIR
+  ctChestModelDir: process.env.CT_CHEST_MODEL_DIR,
+  // Segmentation configuration
+  segmentationEnabled: process.env.SEGMENTATION_ENABLED === 'true',
+  xraySegModelDir: process.env.XRAY_SEG_MODEL_DIR,
+  mriBrainSegModelDir: process.env.MRI_BRAIN_SEG_MODEL_DIR,
+  ctChestSegModelDir: process.env.CT_CHEST_SEG_MODEL_DIR,
+  mriSpineSegModelDir: process.env.MRI_SPINE_SEG_MODEL_DIR,
+  mriKneeSegModelDir: process.env.MRI_KNEE_SEG_MODEL_DIR,
+  skinSegModelDir: process.env.SKIN_SEG_MODEL_DIR,
+  // Explainability configuration
+  explainEnabled: process.env.EXPLAIN_ENABLED === 'true',
+  defaultCamLayerName: process.env.DEFAULT_CAM_LAYER_NAME
 }
 
 // Ensure required directories exist

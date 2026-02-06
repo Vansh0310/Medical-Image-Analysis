@@ -6,7 +6,10 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon --watch src --ext js,json --exec node src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "export-feedback": "node scripts/export-feedback-dataset.js",
+    "clear-data": "node scripts/clear-user-data.js",
+    "train": "node scripts/train-model.js"
   },
   "engines": {
     "node": ">=18 <21",
