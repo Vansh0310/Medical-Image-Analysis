@@ -219,25 +219,37 @@ function applyDetectionHeuristics(modelResults, imageStats) {
   // Heuristic adjustments based on image characteristics
   const adjustments = {}
   
-  // Brain MRI heuristics:
-  // - Typically more square/circular (aspect ratio close to 1)
-  // - Often has dark background (high dark ratio)
-  // - Moderate to high average intensity
-  if (Math.abs(aspectRatio - 1.0) < 0.3 && darkRatio > 0.3 && avgIntensity > 80 && avgIntensity < 180) {
-    const brainIndex = results.topK.findIndex(r => r.label === 'MRI_BRAIN')
-    if (brainIndex >= 0) {
-      adjustments['MRI_BRAIN'] = 0.3 // Boost brain MRI score
+  // IMPORTANT: Check knee MRI FIRST (more specific characteristics)
+  // Knee MRI heuristics:
+  // - Can be square OR wider than tall (aspect ratio 0.8 to 1.5)
+  // - Shows bone/cartilage structures (high contrast regions)
+  // - Often has bright bone areas (high bright ratio)
+  // - Moderate intensity (bone shows up bright, soft tissue darker)
+  // - Typically has more uniform distribution of bright/dark areas (joint structures)
+  const isLikelyKnee = (
+    (aspectRatio >= 0.8 && aspectRatio <= 1.5) && // Flexible aspect ratio
+    brightRatio > 0.12 && // Has bright bone structures
+    avgIntensity > 60 && avgIntensity < 150 && // Moderate intensity range
+    (brightRatio + darkRatio) > 0.4 // Good contrast (both bright and dark areas)
+  )
+  
+  if (isLikelyKnee) {
+    const kneeIndex = results.topK.findIndex(r => r.label === 'MRI_KNEE')
+    if (kneeIndex >= 0) {
+      adjustments['MRI_KNEE'] = 0.4 // Strong boost for knee MRI
+      console.log('Knee MRI characteristics detected - applying boost')
     }
   }
   
-  // Knee MRI heuristics:
-  // - Often wider than tall (aspect ratio > 1.2)
-  // - Shows bone structures (high contrast, bright areas)
-  // - Lower average intensity due to bone shadows
-  if (aspectRatio > 1.2 && brightRatio > 0.15 && avgIntensity < 120) {
-    const kneeIndex = results.topK.findIndex(r => r.label === 'MRI_KNEE')
-    if (kneeIndex >= 0) {
-      adjustments['MRI_KNEE'] = 0.2 // Boost knee MRI score
+  // Brain MRI heuristics (only if NOT likely knee):
+  // - Typically more square/circular (aspect ratio close to 1)
+  // - Often has dark background (high dark ratio)
+  // - Moderate to high average intensity
+  // - More uniform appearance (less structural contrast than knee)
+  if (!isLikelyKnee && Math.abs(aspectRatio - 1.0) < 0.25 && darkRatio > 0.35 && avgIntensity > 90 && avgIntensity < 170) {
+    const brainIndex = results.topK.findIndex(r => r.label === 'MRI_BRAIN')
+    if (brainIndex >= 0) {
+      adjustments['MRI_BRAIN'] = 0.25 // Moderate boost for brain MRI
     }
   }
   
@@ -254,6 +266,24 @@ function applyDetectionHeuristics(modelResults, imageStats) {
   // Apply adjustments
   if (Object.keys(adjustments).length > 0) {
     console.log('Applying heuristic adjustments:', adjustments)
+    
+    // If knee MRI is boosted, reduce brain MRI score to avoid confusion
+    if (adjustments['MRI_KNEE']) {
+      const brainIndex = results.topK.findIndex(r => r.label === 'MRI_BRAIN')
+      if (brainIndex >= 0) {
+        results.topK[brainIndex].score = Math.max(0.05, results.topK[brainIndex].score * 0.4)
+        console.log('Reduced brain MRI score to favor knee MRI')
+      }
+    }
+    
+    // If brain MRI is boosted, reduce knee MRI score
+    if (adjustments['MRI_BRAIN'] && !adjustments['MRI_KNEE']) {
+      const kneeIndex = results.topK.findIndex(r => r.label === 'MRI_KNEE')
+      if (kneeIndex >= 0) {
+        results.topK[kneeIndex].score = Math.max(0.05, results.topK[kneeIndex].score * 0.4)
+        console.log('Reduced knee MRI score to favor brain MRI')
+      }
+    }
     
     // Update scores with adjustments
     results.topK = results.topK.map(result => {
@@ -334,9 +364,34 @@ export async function detectModalityFromFile(filePath) {
       // If heuristics didn't significantly change the result, try more aggressive adjustments
       if (results.top1.score < 0.4) {
         console.log('Low score from demo model, applying stronger heuristics')
-        // Boost the most likely modality based on image characteristics
-        if (Math.abs(imageStats.aspectRatio - 1.0) < 0.3 && imageStats.darkRatio > 0.25) {
-          // Very likely brain MRI
+        
+        // Check for knee MRI characteristics FIRST (priority)
+        const isLikelyKnee = (
+          (imageStats.aspectRatio >= 0.8 && imageStats.aspectRatio <= 1.5) &&
+          imageStats.brightRatio > 0.12 &&
+          imageStats.avgIntensity > 60 && imageStats.avgIntensity < 150
+        )
+        
+        if (isLikelyKnee) {
+          // Very likely knee MRI
+          const kneeIndex = results.topK.findIndex(r => r.label === 'MRI_KNEE')
+          if (kneeIndex >= 0) {
+            results.topK[kneeIndex].score = 0.65
+            // Reduce other MRI scores, especially brain
+            results.topK.forEach((r, i) => {
+              if (r.label.startsWith('MRI_') && r.label !== 'MRI_KNEE') {
+                results.topK[i].score = Math.max(0.05, r.score * 0.25)
+              }
+            })
+            // Renormalize
+            const total = results.topK.reduce((sum, r) => sum + r.score, 0)
+            results.topK = results.topK.map(r => ({ ...r, score: r.score / total }))
+            results.topK.sort((a, b) => b.score - a.score)
+            results.top1 = results.topK[0]
+            console.log('Applied strong knee MRI heuristic')
+          }
+        } else if (Math.abs(imageStats.aspectRatio - 1.0) < 0.25 && imageStats.darkRatio > 0.3) {
+          // Very likely brain MRI (only if NOT knee)
           const brainIndex = results.topK.findIndex(r => r.label === 'MRI_BRAIN')
           if (brainIndex >= 0) {
             results.topK[brainIndex].score = 0.6

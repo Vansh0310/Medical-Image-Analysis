@@ -3,6 +3,12 @@ import { User } from '../models/User.js'
 import { auth, hashPassword, comparePassword, signJwt } from '../auth/index.js'
 
 const router = Router()
+const DUMMY_USER = {
+  id: 'dummy-user',
+  name: 'Demo User',
+  email: 'demo@mediscan.ai',
+  password: 'demo123'
+}
 
 router.post('/register', async (req, res) => {
   try {
@@ -38,6 +44,15 @@ router.post('/login', async (req, res) => {
     }
     
     console.log('Login attempt for email:', email)
+
+    // Dev fallback login that bypasses DB user lookup.
+    if (email === DUMMY_USER.email && password === DUMMY_USER.password) {
+      const token = signJwt({ id: DUMMY_USER.id, email: DUMMY_USER.email })
+      return res.json({
+        token,
+        user: { id: DUMMY_USER.id, name: DUMMY_USER.name, email: DUMMY_USER.email }
+      })
+    }
     
     const user = await User.findOne({ email })
     if (!user) {
